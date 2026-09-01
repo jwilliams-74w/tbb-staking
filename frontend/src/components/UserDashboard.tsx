@@ -13,19 +13,25 @@ export const UserDashboard: FC<{ refreshKey?: number }> = ({ refreshKey }) => {
   const [unstaking, setUnstaking] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadStakes = useCallback(async () => {
+  const loadStakes = useCallback(async (silent = false) => {
     if (!publicKey) { setStakes([]); setLoading(false); return; }
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       setStakes(await fetchUserStakes(connection, publicKey));
     } catch (e) {
       console.error('Failed to load stakes:', e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [publicKey, connection]);
 
   useEffect(() => { loadStakes(); }, [loadStakes, refreshKey]);
+
+  // Auto-refresh every 15s (silently) so unlocked stakes flip to claimable without a manual reload.
+  useEffect(() => {
+    const id = setInterval(() => loadStakes(true), 15_000);
+    return () => clearInterval(id);
+  }, [loadStakes]);
 
   const handleUnstake = async (stake: UserStake) => {
     if (!publicKey || unstaking) return;

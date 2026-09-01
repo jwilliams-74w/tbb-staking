@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 
-const RPC = 'http://127.0.0.1:8899';
+const RPC = process.env.RPC_URL || 'http://127.0.0.1:8899';
 const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
 const envFile = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 const TBB_MINT = new PublicKey(envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
