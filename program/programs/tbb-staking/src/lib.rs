@@ -44,6 +44,39 @@ pub mod tbb_staking {
         )
     }
 
+    /// Dev withdraws UNRESERVED treasury funds only. Interest already promised
+    /// to stakers can never be touched — the surplus is treasury minus promised.
+    pub fn withdraw_surplus(ctx: Context<WithdrawSurplus>, amount: u64) -> Result<()> {
+        require!(amount > 0, StakingError::ZeroAmount);
+        let pool = &ctx.accounts.pool;
+        let surplus = ctx
+            .accounts
+            .treasury
+            .amount
+            .checked_sub(pool.total_promised_interest)
+            .ok_or(StakingError::InsufficientSurplus)?;
+        require!(amount <= surplus, StakingError::InsufficientSurplus);
+
+        let pool_seeds: &[&[u8]] = &[b"pool", &[pool.bump]];
+        transfer_tokens(
+            &ctx.accounts.token_program,
+            &ctx.accounts.treasury,
+            &ctx.accounts.mint,
+            &ctx.accounts.authority_ata,
+            &ctx.accounts.pool.to_account_info(),
+            amount,
+            ctx.accounts.mint.decimals,
+            Some(&[pool_seeds]),
+        )?;
+
+        emit!(SurplusWithdrawn {
+            authority: ctx.accounts.authority.key(),
+            amount,
+            remaining_surplus: surplus - amount,
+        });
+        Ok(())
+    }
+
     /// User stakes `amount` for tier 0..=3. Principal moves to a per-stake PDA vault.
     pub fn stake(ctx: Context<Stake>, amount: u64, tier: u8) -> Result<()> {
         require!(amount > 0, StakingError::ZeroAmount);
@@ -291,6 +324,20 @@ pub struct FundTreasury<'info> {
 }
 
 #[derive(Accounts)]
+pub struct WithdrawSurplus<'info> {
+    #[account(mut, address = pool.authority)]
+    pub authority: Signer<'info>,
+    #[account(seeds = [b"pool"], bump = pool.bump, has_one = mint, has_one = treasury)]
+    pub pool: Account<'info, Pool>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(mut)]
+    pub treasury: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, token::mint = mint, token::authority = authority)]
+    pub authority_ata: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
 pub struct Stake<'info> {
     #[account(mut)]
     pub staker: Signer<'info>,
@@ -365,6 +412,13 @@ pub struct Unstaked {
     pub interest: u64,
 }
 
+#[event]
+pub struct SurplusWithdrawn {
+    pub authority: Pubkey,
+    pub amount: u64,
+    pub remaining_surplus: u64,
+}
+
 #[error_code]
 pub enum StakingError {
     #[msg("Amount must be greater than zero")]
@@ -377,4 +431,6 @@ pub enum StakingError {
     TreasuryUnderfunded,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Withdrawal exceeds unreserved treasury surplus")]
+    InsufficientSurplus,
 }

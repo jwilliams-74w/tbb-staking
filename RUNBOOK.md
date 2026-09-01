@@ -15,6 +15,7 @@
 - fund-wallet.mjs <ADDR> [TBB] — fund a Phantom wallet with 5 SOL + test TBB
 - adversarial-test.mjs — 12-case attack suite (2026-09-01, ALL PASS): zero amount, invalid tiers (5/255), over-balance stake, treasury-underfund guard, cross-wallet theft, foreign-ATA payout redirect, early unstake, exact payout math, double unstake, pool accounting restore, non-authority fund_treasury
 - verify-integrity.mjs — audits every live stake's interest vs formula, checks Pool totals == Σ stakes, treasury solvency; auto-unstakes unlocked demo-tier leftovers
+- withdraw-surplus-test.mjs — withdraw_surplus instruction (2026-09-01, 6/6 PASS): authority-only, capped at treasury minus promised interest (staker rewards untouchable), exact balance moves, round-trip refund
 
 ## Restart after reboot
 ```bash
