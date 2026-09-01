@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { StakingInterface } from '@/components/StakingInterface';
@@ -9,6 +9,10 @@ import { UserDashboard } from '@/components/UserDashboard';
 export default function Home() {
   const { connected } = useWallet();
   const [refreshKey, setRefreshKey] = useState(0);
+  // Wallet button must render client-side only (its content depends on the
+  // browser's wallet extension state → SSR/client mismatch = hydration error).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   return (
     <main className="min-h-screen bg-tbb-dark">
@@ -22,7 +26,7 @@ export default function Home() {
               <p className="text-sm text-gray-400">The Bitcoin Bull</p>
             </div>
           </div>
-          <WalletMultiButton />
+          {mounted ? <WalletMultiButton /> : <div style={{ width: 150, height: 48 }} />}
         </div>
       </header>
 
@@ -71,7 +75,7 @@ export default function Home() {
               <p className="text-gray-400 mb-6">
                 Connect your Solana wallet to start staking TBB tokens
               </p>
-              <WalletMultiButton />
+              {mounted && <WalletMultiButton />}
             </div>
           )}
         </div>
