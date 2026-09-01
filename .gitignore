@@ -1,0 +1,6 @@
+node_modules/
+.next/
+target/
+test-ledger/
+.env.local
+.DS_Store
