@@ -6,7 +6,7 @@ import Countdown from 'react-countdown';
 import { TIERS, buildUnstakeTx, fetchUserStakes, UserStake } from '@/lib/staking';
 
 export const UserDashboard: FC<{ refreshKey?: number }> = ({ refreshKey }) => {
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
   const { connection } = useConnection();
   const [stakes, setStakes] = useState<UserStake[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +33,15 @@ export const UserDashboard: FC<{ refreshKey?: number }> = ({ refreshKey }) => {
     setStatus(null);
     try {
       const tx = await buildUnstakeTx(publicKey, stake.address);
-      const sig = await sendTransaction(tx, connection);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      let sig: string;
+      if (signTransaction) {
+        const signed = await signTransaction(tx);
+        sig = await connection.sendRawTransaction(signed.serialize());
+      } else {
+        sig = await sendTransaction(tx, connection);
+      }
       await connection.confirmTransaction(sig, 'confirmed');
       setStatus(`Unstaked ${(stake.amount + stake.interest).toLocaleString()} TBB ✓`);
       await loadStakes();

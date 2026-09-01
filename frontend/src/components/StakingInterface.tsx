@@ -7,7 +7,7 @@ import { TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { TIERS, TBB_MINT, buildStakeTx, computeInterest } from '@/lib/staking';
 
 export const StakingInterface: FC<{ onStaked?: () => void }> = ({ onStaked }) => {
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
   const { connection } = useConnection();
   const [amount, setAmount] = useState('');
   const [selectedTier, setSelectedTier] = useState(0);
@@ -38,7 +38,17 @@ export const StakingInterface: FC<{ onStaked?: () => void }> = ({ onStaked }) =>
     setStatus(null);
     try {
       const tx = await buildStakeTx(connection, publicKey, parseFloat(amount), selectedTier);
-      const sig = await sendTransaction(tx, connection);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      // Sign with the wallet, but SUBMIT through our own RPC (localhost) —
+      // Phantom's sendTransaction submits via its own network and fails on Localnet.
+      let sig: string;
+      if (signTransaction) {
+        const signed = await signTransaction(tx);
+        sig = await connection.sendRawTransaction(signed.serialize());
+      } else {
+        sig = await sendTransaction(tx, connection);
+      }
       await connection.confirmTransaction(sig, 'confirmed');
       setStatus({ kind: 'ok', msg: `Staked! Tx: ${sig.slice(0, 8)}…${sig.slice(-8)}` });
       setAmount('');
