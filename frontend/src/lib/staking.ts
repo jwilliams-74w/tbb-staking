@@ -20,7 +20,7 @@ const DISCRIMINATORS: Record<string, Uint8Array> = {};
 async function disc(name: string): Promise<Uint8Array> {
   if (DISCRIMINATORS[name]) return DISCRIMINATORS[name];
   const data = new TextEncoder().encode(`global:${name}`);
-  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hash = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
   const d = new Uint8Array(hash).slice(0, 8);
   DISCRIMINATORS[name] = d;
   return d;
