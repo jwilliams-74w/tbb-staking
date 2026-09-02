@@ -1,12 +1,20 @@
-# TBB Staking — Current State & Runbook (2026-08-31)
+# TBB Staking — Current State & Runbook (updated 2026-09-02)
 
-## LIVE RIGHT NOW (local validator)
-- Program: `4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae` (deployed, lifecycle-tested)
+## LIVE ON DEVNET (public network) — primary environment
+- Program: `4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae` (includes withdraw_surplus)
+- **Public frontend: https://tbb-staking-going-parabolic.vercel.app** (Vercel, project tbb-staking, team going-parabolic)
+- Devnet test mint: `H4wtj4ou9YYcXPHkt8i95t6xWT8KQDugYk72CFyA4pJr`
+- Pool: `QB8dcHsjAtdnbMS4rU7X2p3tHi58paC6wrEWBHbB4nM` | Treasury: 10M test TBB
+- 12/12 adversarial tests PASS on devnet; full stake→claim lifecycle proven from Jason's Phantom
+- GitHub (PUBLIC): https://github.com/jwilliams-74w/tbb-staking (gh CLI authed as jwilliams-74w)
+- Audit: quote requested from Accretion (contact@accretion.xyz, 2026-09-02) — see docs/audit-options-2026.md
+- frontend/.env.local → devnet; localnet config preserved in frontend/.env.localnet.bak
+
+## LOCAL VALIDATOR (still available for dev)
 - Validator: `solana-test-validator --ledger /tmp/tbb-ledger` (background)
-- Frontend: `npm run dev` in frontend/ → http://localhost:3000
-- Test TBB mint (local only): see frontend/.env.local NEXT_PUBLIC_TBB_MINT
-- Pool + treasury initialized; treasury holds 10M test TBB
-- Deploy wallet: ~/.config/solana/id.json = GsFnpyNUEny2L7KEfUiN8QtpU29eDJPEZuq3XMFH7yWv
+- Frontend: `npm run dev` in frontend/ → http://localhost:3000 (uses whatever .env.local points at)
+- Local mint/pool state intact on the ledger; to use it, swap .env.localnet.bak back in
+- Deploy wallet: ~/.config/solana/id.json = GsFnpyNUEny2L7KEfUiN8QtpU29eDJPEZuq3XMFH7yWv (~3.3 devnet SOL left)
 
 ## Proven by tests (scripts in frontend/scripts/)
 - setup-local.mjs — mint + pool init + treasury funding
