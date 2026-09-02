@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { StakingInterface } from '@/components/StakingInterface';
 import { UserDashboard } from '@/components/UserDashboard';
+import { FaucetButton } from '@/components/FaucetButton';
 
 export default function Home() {
   const { connected } = useWallet();
@@ -65,10 +66,13 @@ export default function Home() {
       <section className="pb-16">
         <div className="max-w-7xl mx-auto px-4">
           {connected ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <StakingInterface onStaked={() => setRefreshKey(k => k + 1)} />
-              <UserDashboard refreshKey={refreshKey} />
-            </div>
+            <>
+              <FaucetButton onFunded={() => setRefreshKey(k => k + 1)} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <StakingInterface key={refreshKey} onStaked={() => setRefreshKey(k => k + 1)} />
+                <UserDashboard refreshKey={refreshKey} />
+              </div>
+            </>
           ) : (
             <div className="card max-w-md mx-auto text-center">
               <h3 className="text-2xl font-bold text-white mb-4">Connect Your Wallet</h3>
