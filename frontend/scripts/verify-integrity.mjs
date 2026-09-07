@@ -7,7 +7,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const envFile = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 const TBB_MINT = new PublicKey(envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
 const disc = (n) => createHash('sha256').update(`global:${n}`).digest().subarray(0, 8);

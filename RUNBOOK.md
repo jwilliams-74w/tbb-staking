@@ -1,13 +1,18 @@
-# TBB Staking — Current State & Runbook (updated 2026-09-02)
+# TBB Staking — Current State & Runbook (updated 2026-09-07, post-audit-remediation)
+
+## AUDIT (Accretion, A26ART1)
+- Findings repo: https://github.com/accretion-xyz/2026-artemis-capital-llc-audit-A26ART1/issues
+- All 9 findings (#3 HIGH dusting, #5–#8 hostile-mint, #9 stake nonce, #10 zero-interest, #11 init front-run, #12 hardcoded tiers) remediated 2026-09-07; remediation commits linked on each issue
+- Key program changes: full-vault sweep on unstake; mint validated at init (no freeze auth / fee / hook / permanent delegate / close auth); treasury seeded ≥1 unit at init and floor kept by withdraw_surplus; stake PDA seeded by caller-random stake_id; interest>0 required; init gated to program upgrade authority (pass program + programdata accounts); tiers live in Pool state w/ set_tiers + scheduled cutover
+- stake ix args now (amount: u64, tier: u8, stake_id: u64); initialize_pool takes (initial_funding: u64) + funder_ata + program + programdata accounts
+- Test suites: e2e, lifecycle, adversarial (12), audit-regression-test.mjs (7), hostile-mint-test.mjs (6 — needs FRESH ledger, no pool)
 
 ## LIVE ON DEVNET (public network) — primary environment
-- Program: `4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae` (includes withdraw_surplus)
+- Program: `GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk` (audited build; old 4GgJ… program closed, rent reclaimed)
 - **Public frontend: https://tbb-staking-going-parabolic.vercel.app** (Vercel, project tbb-staking, team going-parabolic)
-- Devnet test mint: `H4wtj4ou9YYcXPHkt8i95t6xWT8KQDugYk72CFyA4pJr`
-- Pool: `QB8dcHsjAtdnbMS4rU7X2p3tHi58paC6wrEWBHbB4nM` | Treasury: 10M test TBB
-- 12/12 adversarial tests PASS on devnet; full stake→claim lifecycle proven from Jason's Phantom
+- Devnet test mint: `8vNYqyPKx1Rr9919c2Fa4RsbRB2PhxwcctCi5yrebDL3`
+- Pool: `HpasThWQReRyKDi46DJz61scgvLG7HC8M3RkgqrEsfo` | Treasury: `B1h7kkukCEASkLQ3WQwZz4s9rX6C5fvivH62eQeVhMog` (10M+1 test TBB)
 - GitHub (PUBLIC): https://github.com/jwilliams-74w/tbb-staking (gh CLI authed as jwilliams-74w)
-- Audit: quote requested from Accretion (contact@accretion.xyz, 2026-09-02) — see docs/audit-options-2026.md
 - frontend/.env.local → devnet; localnet config preserved in frontend/.env.localnet.bak
 
 ## LOCAL VALIDATOR (still available for dev)
@@ -50,8 +55,8 @@ cd ../frontend && node scripts/setup-local.mjs   # edit RPC const to devnet firs
 ```
 
 ## Going to MAINNET (checklist — DO NOT skip)
-1. **Remove demo tier** from lib.rs TIERS (and frontend TIERS) — it's marked with a comment
-2. Point TBB_MINT at the real mint 42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump (remove NEXT_PUBLIC_TBB_MINT override)
+1. **Replace demo tier via `set_tiers`** (authority-only, scheduled cutover) — no program upgrade needed; also update frontend TIERS
+2. Point TBB_MINT at the real mint 42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump (remove NEXT_PUBLIC_TBB_MINT override). NOTE: initialize_pool now REJECTS mints with freeze authority or fee/hook/permanent-delegate/close extensions — real TBB (plain pump.fun SPL) passes. Init requires the upgrade-authority wallet + initial_funding ≥ 1 unit.
 3. Professional audit of the program (real money — non-negotiable)
 4. Deploy costs ~2.5 SOL; keep upgrade authority on a hardware wallet or multisig
 5. Fund treasury with real TBB via fund_treasury (dev-only instruction, checked on-chain)

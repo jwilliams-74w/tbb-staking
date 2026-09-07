@@ -6,7 +6,7 @@ import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/sp
 
 const conn = new Connection('https://api.devnet.solana.com', 'confirmed');
 const MINT = new PublicKey('H4wtj4ou9YYcXPHkt8i95t6xWT8KQDugYk72CFyA4pJr');
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const DEPLOY = new PublicKey('GsFnpyNUEny2L7KEfUiN8QtpU29eDJPEZuq3XMFH7yWv');
 const JASON = 'XQnMgnRjtPTHrXiiSt3Ek9c62YZsuDfY2XE3ajPKmrw';
 

@@ -1,6 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 const conn = new Connection('http://127.0.0.1:8899', 'confirmed');
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const staker = new PublicKey(process.argv[2]);
 const accounts = await conn.getProgramAccounts(PROGRAM_ID, { filters: [
   { dataSize: 8+32+32+8+1+2+8+8+8+8+1 },

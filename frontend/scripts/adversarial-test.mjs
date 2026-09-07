@@ -13,7 +13,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = process.env.RPC_URL || 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const envFile = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 const TBB_MINT = new PublicKey(envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
 
@@ -43,20 +43,24 @@ async function readPool() {
   return { totalStaked, totalPromised, totalStakes };
 }
 
-function stakePdas(staker, index) {
-  const idxBuf = Buffer.alloc(8); idxBuf.writeBigUInt64LE(index);
+import { randomBytes } from 'crypto';
+function randomStakeId() { return randomBytes(8).readBigUInt64LE(0); }
+
+function stakePdas(staker, stakeId) {
+  const idxBuf = Buffer.alloc(8); idxBuf.writeBigUInt64LE(stakeId);
   const [stakeAccount] = PublicKey.findProgramAddressSync(
     [Buffer.from('stake'), pool.toBuffer(), staker.toBuffer(), idxBuf], PROGRAM_ID);
   const [vault] = PublicKey.findProgramAddressSync(
     [Buffer.from('vault'), stakeAccount.toBuffer()], PROGRAM_ID);
-  return { stakeAccount, vault };
+  return { stakeAccount, vault, stakeId };
 }
 
-function stakeIx(staker, ata, stakeAccount, vault, amount, tier) {
-  const data = Buffer.alloc(17);
+function stakeIx(staker, ata, stakeAccount, vault, amount, tier, stakeId) {
+  const data = Buffer.alloc(25);
   Buffer.from(disc('stake')).copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeUInt8(tier, 16);
+  data.writeBigUInt64LE(stakeId, 17);
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -108,31 +112,31 @@ console.log(`Pool before: staked=${Number(poolBefore.totalStaked) / 1e6} TBB, pr
 
 // ---------- 1. Zero-amount stake ----------
 {
-  const { stakeAccount, vault } = stakePdas(payer.publicKey, poolBefore.totalStakes);
+  const { stakeAccount, vault, stakeId } = stakePdas(payer.publicKey, randomStakeId());
   await expectFail('1. Zero-amount stake rejected', new Transaction().add(
-    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 0n, 0)), [payer], 'ZeroAmount');
+    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 0n, 0, stakeId)), [payer], 'ZeroAmount');
 }
 
 // ---------- 2. Invalid tier (5) ----------
 {
-  const { stakeAccount, vault } = stakePdas(payer.publicKey, (await readPool()).totalStakes);
+  const { stakeAccount, vault, stakeId } = stakePdas(payer.publicKey, randomStakeId());
   await expectFail('2. Invalid tier 5 rejected', new Transaction().add(
-    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 1000n * 1_000_000n, 5)), [payer], 'InvalidTier');
+    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 1000n * 1_000_000n, 5, stakeId)), [payer], 'InvalidTier');
 }
 
 // ---------- 3. Tier 255 (u8 max) ----------
 {
-  const { stakeAccount, vault } = stakePdas(payer.publicKey, (await readPool()).totalStakes);
+  const { stakeAccount, vault, stakeId } = stakePdas(payer.publicKey, randomStakeId());
   await expectFail('3. Tier 255 rejected', new Transaction().add(
-    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 1000n * 1_000_000n, 255)), [payer], 'InvalidTier');
+    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, 1000n * 1_000_000n, 255, stakeId)), [payer], 'InvalidTier');
 }
 
 // ---------- 4. Stake more than wallet balance ----------
 {
   const bal = BigInt((await conn.getTokenAccountBalance(payerAta)).value.amount);
-  const { stakeAccount, vault } = stakePdas(payer.publicKey, (await readPool()).totalStakes);
+  const { stakeAccount, vault, stakeId } = stakePdas(payer.publicKey, randomStakeId());
   await expectFail('4. Stake exceeding wallet balance rejected', new Transaction().add(
-    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, bal + 1_000_000n, 0)), [payer], '');
+    stakeIx(payer.publicKey, payerAta, stakeAccount, vault, bal + 1_000_000n, 0, stakeId)), [payer], '');
 }
 
 // ---------- 5. Treasury underfunded guard ----------
@@ -145,9 +149,9 @@ console.log(`Pool before: staked=${Number(poolBefore.totalStaked) / 1e6} TBB, pr
   const tooBig = (available * 10_000n) / 1800n + 1_000_000_000n; // definitely over
   const bal = BigInt((await conn.getTokenAccountBalance(payerAta)).value.amount);
   if (tooBig <= bal) {
-    const { stakeAccount, vault } = stakePdas(payer.publicKey, p.totalStakes);
+    const { stakeAccount, vault, stakeId } = stakePdas(payer.publicKey, randomStakeId());
     await expectFail('5. Treasury-underfunded stake rejected', new Transaction().add(
-      stakeIx(payer.publicKey, payerAta, stakeAccount, vault, tooBig, 3)), [payer], 'TreasuryUnderfunded');
+      stakeIx(payer.publicKey, payerAta, stakeAccount, vault, tooBig, 3, stakeId)), [payer], 'TreasuryUnderfunded');
   } else {
     console.log(`5. SKIPPED treasury-underfund test — wallet (${bal / 1_000_000n} TBB) can't reach required ${tooBig / 1_000_000n} TBB`);
     record('5. Treasury-underfunded stake rejected', true, `SKIPPED (wallet too small to over-promise; guard verified by inspection: available=${available / 1_000_000n} TBB)`);
@@ -156,12 +160,12 @@ console.log(`Pool before: staked=${Number(poolBefore.totalStaked) / 1e6} TBB, pr
 
 // ---------- Set up a real stake on the demo tier for theft tests ----------
 const pNow = await readPool();
-const victimIndex = pNow.totalStakes;
-const { stakeAccount: victimStake, vault: victimVault } = stakePdas(payer.publicKey, victimIndex);
+const victimId = randomStakeId();
+const { stakeAccount: victimStake, vault: victimVault } = stakePdas(payer.publicKey, victimId);
 const stakeAmt = 1_000n * 1_000_000n;
 await sendAndConfirmTransaction(conn, new Transaction().add(
-  stakeIx(payer.publicKey, payerAta, victimStake, victimVault, stakeAmt, 4)), [payer]);
-console.log(`\n[setup] Staked 1,000 TBB on demo tier (index ${victimIndex}) for theft tests\n`);
+  stakeIx(payer.publicKey, payerAta, victimStake, victimVault, stakeAmt, 4, victimId)), [payer]);
+console.log(`\n[setup] Staked 1,000 TBB on demo tier (id ${victimId}) for theft tests\n`);
 
 // ---------- 6. Attacker signs unstake of someone else's stake ----------
 const attacker = Keypair.generate();

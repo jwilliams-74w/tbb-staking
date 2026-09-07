@@ -1,6 +1,6 @@
 // List unique staker wallets on localnet, then check each one's SOL balance on devnet + localnet.
 import { Connection, PublicKey } from '@solana/web3.js';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const local = new Connection('http://127.0.0.1:8899', 'confirmed');
 const devnet = new Connection('https://api.devnet.solana.com', 'confirmed');
 

@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 
 const disc = (name) => createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
 
@@ -42,6 +42,14 @@ console.log('Dev ATA (100M TBB):', ataAddr.toBase58());
 const [pool] = PublicKey.findProgramAddressSync([Buffer.from('pool')], PROGRAM_ID);
 const [treasury] = PublicKey.findProgramAddressSync([Buffer.from('treasury')], PROGRAM_ID);
 
+// Audit A26ART1 #11: init restricted to the program upgrade authority (program + programdata accounts).
+// Audit A26ART1 #5/#6/#7: treasury must be funded (>=1 unit) in the same instruction.
+const BPF_LOADER_UPGRADEABLE = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
+const [programData] = PublicKey.findProgramAddressSync([PROGRAM_ID.toBuffer()], BPF_LOADER_UPGRADEABLE);
+const initialFunding = 1_000_000n; // 1 TBB seed
+const initData = Buffer.alloc(16);
+disc('initialize_pool').copy(initData, 0);
+initData.writeBigUInt64LE(initialFunding, 8);
 const initIx = new TransactionInstruction({
   programId: PROGRAM_ID,
   keys: [
@@ -49,10 +57,13 @@ const initIx = new TransactionInstruction({
     { pubkey: mintKp.publicKey, isSigner: false, isWritable: false },
     { pubkey: pool, isSigner: false, isWritable: true },
     { pubkey: treasury, isSigner: false, isWritable: true },
+    { pubkey: ataAddr, isSigner: false, isWritable: true },
+    { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: programData, isSigner: false, isWritable: false },
     { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ],
-  data: disc('initialize_pool'),
+  data: initData,
 });
 await sendAndConfirmTransaction(conn, new Transaction().add(initIx), [payer]);
 console.log('Pool initialized:', pool.toBase58());

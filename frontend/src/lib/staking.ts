@@ -2,7 +2,7 @@
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 
-export const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+export const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 export const TBB_MINT = new PublicKey(process.env.NEXT_PUBLIC_TBB_MINT || '42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump');
 
 export const TIERS = [
@@ -32,10 +32,19 @@ export function getPoolPDA() {
 export function getTreasuryPDA() {
   return PublicKey.findProgramAddressSync([Buffer.from('treasury')], PROGRAM_ID)[0];
 }
-export function getStakePDA(pool: PublicKey, staker: PublicKey, index: bigint) {
+// Audit A26ART1 #9: stake PDA is seeded by a caller-chosen stake_id (random u64),
+// not the shared pool.total_stakes counter — concurrent stakes can't collide.
+export function getStakePDA(pool: PublicKey, staker: PublicKey, stakeId: bigint) {
   const b = Buffer.alloc(8);
-  b.writeBigUInt64LE(index);
+  b.writeBigUInt64LE(stakeId);
   return PublicKey.findProgramAddressSync([Buffer.from('stake'), pool.toBuffer(), staker.toBuffer(), b], PROGRAM_ID)[0];
+}
+
+/** Random u64 stake id (collision odds negligible; program rejects an existing PDA anyway). */
+export function randomStakeId(): bigint {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return new DataView(bytes.buffer).getBigUint64(0, true);
 }
 export function getVaultPDA(stakeAccount: PublicKey) {
   return PublicKey.findProgramAddressSync([Buffer.from('vault'), stakeAccount.toBuffer()], PROGRAM_ID)[0];
@@ -59,17 +68,18 @@ export async function fetchPoolTotalStakes(conn: Connection): Promise<bigint> {
 export async function buildStakeTx(conn: Connection, staker: PublicKey, amountUi: number, tier: number): Promise<Transaction> {
   const pool = getPoolPDA();
   const treasury = getTreasuryPDA();
-  const stakeIndex = await fetchPoolTotalStakes(conn);
-  const stakeAccount = getStakePDA(pool, staker, stakeIndex);
+  const stakeId = randomStakeId();
+  const stakeAccount = getStakePDA(pool, staker, stakeId);
   const vault = getVaultPDA(stakeAccount);
   const stakerAta = getAssociatedTokenAddressSync(TBB_MINT, staker, false, TOKEN_2022_PROGRAM_ID);
 
   const amount = BigInt(Math.floor(amountUi * 1e6));
   const d = await disc('stake');
-  const data = Buffer.alloc(8 + 8 + 1);
+  const data = Buffer.alloc(8 + 8 + 1 + 8);
   Buffer.from(d).copy(data, 0);
   data.writeBigUInt64LE(amount, 8);
   data.writeUInt8(tier, 16);
+  data.writeBigUInt64LE(stakeId, 17);
 
   const ix = new TransactionInstruction({
     programId: PROGRAM_ID,

@@ -1,32 +1,89 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions},
+    state::Mint as SplMintState,
+};
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-declare_id!("4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae");
+declare_id!("GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk");
 
 pub const SECONDS_PER_YEAR: u128 = 31_536_000; // 365 days
+pub const TIER_COUNT: usize = 5;
+/// Hard cap on configurable APR: 100%.
+pub const MAX_APR_BPS: u16 = 10_000;
 
-/// Lock tiers: (seconds, APR in basis points)
-pub const TIERS: [(i64, u16); 5] = [
-    (30 * 86_400, 500),   // 1 month  -> 5% APR
-    (90 * 86_400, 800),   // 3 months -> 8% APR
-    (180 * 86_400, 1200), // 6 months -> 12% APR
-    (365 * 86_400, 1800), // 12 months -> 18% APR
-    (120, 1800),          // DEMO: 2-minute lock (remove before mainnet)
+/// Default lock tiers used at pool initialization: (seconds, APR in basis points).
+/// Audit A26ART1 #12: tiers now live in Pool state and are updatable via `set_tiers`
+/// (authority-only, with a scheduled cutover) — no program upgrade required.
+pub const DEFAULT_TIERS: [TierConfig; TIER_COUNT] = [
+    TierConfig { lock_seconds: 30 * 86_400, apr_bps: 500 },   // 1 month  -> 5% APR
+    TierConfig { lock_seconds: 90 * 86_400, apr_bps: 800 },   // 3 months -> 8% APR
+    TierConfig { lock_seconds: 180 * 86_400, apr_bps: 1200 }, // 6 months -> 12% APR
+    TierConfig { lock_seconds: 365 * 86_400, apr_bps: 1800 }, // 12 months -> 18% APR
+    TierConfig { lock_seconds: 120, apr_bps: 1800 },          // DEMO: 2-minute lock (replace via set_tiers before mainnet)
 ];
 
 #[program]
 pub mod tbb_staking {
     use super::*;
 
-    /// One-time: dev creates the pool. Authority = dev wallet.
-    pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
+    /// One-time: dev creates the pool.
+    /// Audit A26ART1 #11: only the program's upgrade authority may initialize.
+    /// Audit A26ART1 #5/#6/#7/#8: the mint must have no freeze authority and no
+    /// dangerous Token-2022 extensions (transfer fee, transfer hook, permanent
+    /// delegate, mint close authority).
+    /// Audit A26ART1 #5/#6/#7: the treasury must be funded (>= 1 base unit) in
+    /// this same instruction so the mint can never be closed and re-created
+    /// with different authorities.
+    pub fn initialize_pool(ctx: Context<InitializePool>, initial_funding: u64) -> Result<()> {
+        require!(initial_funding > 0, StakingError::ZeroAmount);
+
+        // ---- Mint safety validation (audit #5, #6, #7, #8) ----
+        let mint = &ctx.accounts.mint;
+        require!(
+            mint.freeze_authority.is_none(),
+            StakingError::MintHasFreezeAuthority
+        );
+        let mint_info = mint.to_account_info();
+        if *mint_info.owner == anchor_spl::token_2022::ID {
+            let data = mint_info.try_borrow_data()?;
+            let state = StateWithExtensions::<SplMintState>::unpack(&data)?;
+            for ext in state.get_extension_types()? {
+                match ext {
+                    ExtensionType::TransferFeeConfig
+                    | ExtensionType::TransferHook
+                    | ExtensionType::PermanentDelegate
+                    | ExtensionType::MintCloseAuthority => {
+                        return err!(StakingError::ForbiddenMintExtension);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let pool = &mut ctx.accounts.pool;
         pool.authority = ctx.accounts.authority.key();
-        pool.mint = ctx.accounts.mint.key();
+        pool.mint = mint.key();
         pool.treasury = ctx.accounts.treasury.key();
         pool.total_staked = 0;
         pool.total_stakes = 0;
         pool.bump = ctx.bumps.pool;
+        pool.tiers = DEFAULT_TIERS;
+        pool.pending_tiers = DEFAULT_TIERS;
+        pool.tiers_effective_ts = 0;
+
+        // ---- Fund the treasury in the same instruction (audit #5, #6, #7) ----
+        transfer_tokens(
+            &ctx.accounts.token_program,
+            &ctx.accounts.funder_ata,
+            &ctx.accounts.mint,
+            &ctx.accounts.treasury,
+            &ctx.accounts.authority.to_account_info(),
+            initial_funding,
+            ctx.accounts.mint.decimals,
+            None,
+        )?;
+
         Ok(())
     }
 
@@ -44,8 +101,31 @@ pub mod tbb_staking {
         )
     }
 
+    /// Audit A26ART1 #12: authority schedules a new tier table with a cutover
+    /// timestamp. The new table takes effect for stakes created at/after
+    /// `effective_ts`; existing stakes keep their locked-in terms.
+    pub fn set_tiers(
+        ctx: Context<SetTiers>,
+        new_tiers: [TierConfig; TIER_COUNT],
+        effective_ts: i64,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(effective_ts >= now, StakingError::InvalidEffectiveTs);
+        for t in new_tiers.iter() {
+            require!(t.lock_seconds > 0, StakingError::InvalidTierConfig);
+            require!(t.apr_bps <= MAX_APR_BPS, StakingError::InvalidTierConfig);
+        }
+        let pool = &mut ctx.accounts.pool;
+        pool.pending_tiers = new_tiers;
+        pool.tiers_effective_ts = effective_ts;
+        emit!(TiersScheduled { effective_ts });
+        Ok(())
+    }
+
     /// Dev withdraws UNRESERVED treasury funds only. Interest already promised
     /// to stakers can never be touched — the surplus is treasury minus promised.
+    /// Audit A26ART1 #5/#6/#7: at least 1 base unit must always remain in the
+    /// treasury so the mint can never reach zero circulating supply.
     pub fn withdraw_surplus(ctx: Context<WithdrawSurplus>, amount: u64) -> Result<()> {
         require!(amount > 0, StakingError::ZeroAmount);
         let pool = &ctx.accounts.pool;
@@ -54,7 +134,8 @@ pub mod tbb_staking {
             .treasury
             .amount
             .checked_sub(pool.total_promised_interest)
-            .ok_or(StakingError::InsufficientSurplus)?;
+            .ok_or(StakingError::InsufficientSurplus)?
+            .saturating_sub(1); // keep 1 base unit forever in circulation
         require!(amount <= surplus, StakingError::InsufficientSurplus);
 
         let pool_seeds: &[&[u8]] = &[b"pool", &[pool.bump]];
@@ -77,16 +158,58 @@ pub mod tbb_staking {
         Ok(())
     }
 
-    /// User stakes `amount` for tier 0..=3. Principal moves to a per-stake PDA vault.
-    pub fn stake(ctx: Context<Stake>, amount: u64, tier: u8) -> Result<()> {
+    /// User stakes `amount` for a tier. Principal moves to a per-stake PDA vault.
+    /// Audit A26ART1 #9: the stake PDA is derived from a caller-chosen `stake_id`
+    /// instead of the shared global counter, so concurrent stakers can never
+    /// invalidate each other's signed transactions.
+    /// Audit A26ART1 #8: the amount actually received by the vault is measured
+    /// (pre/post balance + reload) and recorded — never the gross request.
+    /// Audit A26ART1 #10: stakes whose computed interest rounds to zero are rejected.
+    pub fn stake(ctx: Context<Stake>, amount: u64, tier: u8, stake_id: u64) -> Result<()> {
         require!(amount > 0, StakingError::ZeroAmount);
-        require!((tier as usize) < TIERS.len(), StakingError::InvalidTier);
+        require!((tier as usize) < TIER_COUNT, StakingError::InvalidTier);
 
-        let (lock_seconds, apr_bps) = TIERS[tier as usize];
         let now = Clock::get()?.unix_timestamp;
 
-        // Interest owed at maturity, computed up front (fixed-term product).
-        let interest = compute_interest(amount, apr_bps, lock_seconds)?;
+        // Audit #12: promote a scheduled tier table once its cutover has passed.
+        {
+            let pool = &mut ctx.accounts.pool;
+            if pool.tiers_effective_ts != 0 && now >= pool.tiers_effective_ts {
+                pool.tiers = pool.pending_tiers;
+                pool.tiers_effective_ts = 0;
+            }
+        }
+        let TierConfig {
+            lock_seconds,
+            apr_bps,
+        } = ctx.accounts.pool.tiers[tier as usize];
+        require!(lock_seconds > 0, StakingError::InvalidTier);
+
+        // Move principal into the stake vault, measuring what actually arrives.
+        let vault_before = ctx.accounts.vault.amount;
+        transfer_tokens(
+            &ctx.accounts.token_program,
+            &ctx.accounts.staker_ata,
+            &ctx.accounts.mint,
+            &ctx.accounts.vault,
+            &ctx.accounts.staker.to_account_info(),
+            amount,
+            ctx.accounts.mint.decimals,
+            None,
+        )?;
+        ctx.accounts.vault.reload()?;
+        let received = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(vault_before)
+            .ok_or(StakingError::MathOverflow)?;
+        require!(received > 0, StakingError::ZeroAmount);
+
+        // Interest owed at maturity on the RECEIVED amount (fixed-term product).
+        let interest = compute_interest(received, apr_bps, lock_seconds)?;
+        // Audit #10: refuse zero-yield locked positions.
+        require!(interest > 0, StakingError::ZeroInterest);
 
         // Treasury must already hold enough to honor this stake's interest,
         // beyond what is already promised to earlier stakers.
@@ -99,22 +222,10 @@ pub mod tbb_staking {
             .ok_or(StakingError::TreasuryUnderfunded)?;
         require!(available >= interest, StakingError::TreasuryUnderfunded);
 
-        // Move principal into the stake vault.
-        transfer_tokens(
-            &ctx.accounts.token_program,
-            &ctx.accounts.staker_ata,
-            &ctx.accounts.mint,
-            &ctx.accounts.vault,
-            &ctx.accounts.staker.to_account_info(),
-            amount,
-            ctx.accounts.mint.decimals,
-            None,
-        )?;
-
         let stake_acc = &mut ctx.accounts.stake_account;
         stake_acc.staker = ctx.accounts.staker.key();
         stake_acc.pool = pool.key();
-        stake_acc.amount = amount;
+        stake_acc.amount = received;
         stake_acc.tier = tier;
         stake_acc.apr_bps = apr_bps;
         stake_acc.start_ts = now;
@@ -122,12 +233,12 @@ pub mod tbb_staking {
             .checked_add(lock_seconds)
             .ok_or(StakingError::MathOverflow)?;
         stake_acc.interest = interest;
-        stake_acc.stake_index = pool.total_stakes;
+        stake_acc.stake_index = stake_id;
         stake_acc.bump = ctx.bumps.stake_account;
 
         pool.total_staked = pool
             .total_staked
-            .checked_add(amount)
+            .checked_add(received)
             .ok_or(StakingError::MathOverflow)?;
         pool.total_promised_interest = pool
             .total_promised_interest
@@ -140,7 +251,7 @@ pub mod tbb_staking {
 
         emit!(Staked {
             staker: stake_acc.staker,
-            amount,
+            amount: received,
             tier,
             unlock_ts: stake_acc.unlock_ts,
             interest,
@@ -150,6 +261,9 @@ pub mod tbb_staking {
 
     /// After unlock: principal returns from vault, interest pays out from treasury,
     /// and the stake account + vault close (rent back to staker).
+    /// Audit A26ART1 #3 (HIGH): the FULL vault balance is swept to the staker —
+    /// not just the recorded principal — so unsolicited "dust" donations can
+    /// never make CloseAccount fail and freeze the position.
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let stake_acc = &ctx.accounts.stake_account;
@@ -167,14 +281,15 @@ pub mod tbb_staking {
         ];
         let pool_seeds: &[&[u8]] = &[b"pool", &[ctx.accounts.pool.bump]];
 
-        // 1) Return principal from the stake vault (authority = stake PDA).
+        // 1) Sweep the vault's ENTIRE balance to the staker (audit #3).
+        let vault_balance = ctx.accounts.vault.amount;
         transfer_tokens(
             &ctx.accounts.token_program,
             &ctx.accounts.vault,
             &ctx.accounts.mint,
             &ctx.accounts.staker_ata,
             &ctx.accounts.stake_account.to_account_info(),
-            stake_acc.amount,
+            vault_balance,
             ctx.accounts.mint.decimals,
             Some(&[stake_seeds]),
         )?;
@@ -191,7 +306,8 @@ pub mod tbb_staking {
             Some(&[pool_seeds]),
         )?;
 
-        // 3) Close the vault token account, rent to staker.
+        // 3) Close the vault token account, rent to staker. Balance is provably
+        //    zero after the full sweep above.
         token_interface::close_account(CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             token_interface::CloseAccount {
@@ -209,7 +325,7 @@ pub mod tbb_staking {
 
         emit!(Unstaked {
             staker: staker_key,
-            amount: stake_acc.amount,
+            amount: vault_balance,
             interest: stake_acc.interest,
         });
         Ok(())
@@ -256,6 +372,13 @@ fn transfer_tokens<'info>(
 
 // ---------------- Accounts ----------------
 
+/// A lock tier: lock duration in seconds + APR in basis points.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Debug, PartialEq, Eq)]
+pub struct TierConfig {
+    pub lock_seconds: i64,
+    pub apr_bps: u16,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Pool {
@@ -266,6 +389,12 @@ pub struct Pool {
     pub total_promised_interest: u64,
     pub total_stakes: u64,
     pub bump: u8,
+    /// Audit #12: on-chain tier table (updatable via set_tiers).
+    pub tiers: [TierConfig; TIER_COUNT],
+    /// Scheduled replacement table; takes effect at `tiers_effective_ts`.
+    pub pending_tiers: [TierConfig; TIER_COUNT],
+    /// 0 = no pending cutover.
+    pub tiers_effective_ts: i64,
 }
 
 #[account]
@@ -279,6 +408,7 @@ pub struct StakeAccount {
     pub start_ts: i64,
     pub unlock_ts: i64,
     pub interest: u64,
+    /// Audit #9: caller-chosen stake id (PDA seed), NOT a shared counter.
     pub stake_index: u64,
     pub bump: u8,
 }
@@ -287,7 +417,7 @@ pub struct StakeAccount {
 pub struct InitializePool<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         init,
         payer = authority,
@@ -295,7 +425,7 @@ pub struct InitializePool<'info> {
         seeds = [b"pool"],
         bump
     )]
-    pub pool: Account<'info, Pool>,
+    pub pool: Box<Account<'info, Pool>>,
     #[account(
         init,
         payer = authority,
@@ -304,7 +434,15 @@ pub struct InitializePool<'info> {
         seeds = [b"treasury"],
         bump
     )]
-    pub treasury: InterfaceAccount<'info, TokenAccount>,
+    pub treasury: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// Authority's token account funding the treasury at init (audit #5/#6/#7).
+    #[account(mut, token::mint = mint, token::authority = authority)]
+    pub funder_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// Audit #11: initialization is restricted to the program's upgrade authority.
+    #[account(constraint = this_program.programdata_address()? == Some(program_data.key()) @ StakingError::UnauthorizedInitializer)]
+    pub this_program: Program<'info, crate::program::TbbStaking>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ StakingError::UnauthorizedInitializer)]
+    pub program_data: Box<Account<'info, ProgramData>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
@@ -324,6 +462,14 @@ pub struct FundTreasury<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetTiers<'info> {
+    #[account(address = pool.authority)]
+    pub authority: Signer<'info>,
+    #[account(mut, seeds = [b"pool"], bump = pool.bump)]
+    pub pool: Account<'info, Pool>,
+}
+
+#[derive(Accounts)]
 pub struct WithdrawSurplus<'info> {
     #[account(mut, address = pool.authority)]
     pub authority: Signer<'info>,
@@ -338,6 +484,7 @@ pub struct WithdrawSurplus<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(amount: u64, tier: u8, stake_id: u64)]
 pub struct Stake<'info> {
     #[account(mut)]
     pub staker: Signer<'info>,
@@ -352,7 +499,7 @@ pub struct Stake<'info> {
         init,
         payer = staker,
         space = 8 + StakeAccount::INIT_SPACE,
-        seeds = [b"stake", pool.key().as_ref(), staker.key().as_ref(), &pool.total_stakes.to_le_bytes()],
+        seeds = [b"stake", pool.key().as_ref(), staker.key().as_ref(), &stake_id.to_le_bytes()],
         bump
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
@@ -419,11 +566,16 @@ pub struct SurplusWithdrawn {
     pub remaining_surplus: u64,
 }
 
+#[event]
+pub struct TiersScheduled {
+    pub effective_ts: i64,
+}
+
 #[error_code]
 pub enum StakingError {
     #[msg("Amount must be greater than zero")]
     ZeroAmount,
-    #[msg("Invalid lock tier (0-3)")]
+    #[msg("Invalid lock tier")]
     InvalidTier,
     #[msg("Stake is still locked")]
     StillLocked,
@@ -433,4 +585,16 @@ pub enum StakingError {
     MathOverflow,
     #[msg("Withdrawal exceeds unreserved treasury surplus")]
     InsufficientSurplus,
+    #[msg("Stake too small: computed interest rounds to zero")]
+    ZeroInterest,
+    #[msg("Mint has an active freeze authority — not allowed")]
+    MintHasFreezeAuthority,
+    #[msg("Mint carries a forbidden Token-2022 extension (fee/hook/delegate/close)")]
+    ForbiddenMintExtension,
+    #[msg("Only the program upgrade authority can initialize the pool")]
+    UnauthorizedInitializer,
+    #[msg("Invalid tier configuration")]
+    InvalidTierConfig,
+    #[msg("Cutover timestamp must be in the future")]
+    InvalidEffectiveTs,
 }

@@ -1,6 +1,6 @@
 // Inspect all DEVNET stakes: owner, tier, amounts, timestamps vs chain clock.
 import { Connection, PublicKey } from '@solana/web3.js';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const conn = new Connection('https://api.devnet.solana.com', 'confirmed');
 
 function parseStake(d) {

@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 
-export const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+export const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 export const TBB_MINT = new PublicKey('42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump');
 
 export const TIERS = [

@@ -2,12 +2,12 @@
 // stake -> locked check -> wait for unlock -> unstake -> verify principal + interest returned.
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('4GgJezu4eVAWiCdS3Y4dBWDTNNAhQgDuke2ScwwWEcae');
+const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const envFile = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 const TBB_MINT = new PublicKey(envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
 
@@ -23,17 +23,17 @@ const balBefore = (await conn.getTokenAccountBalance(ata)).value.uiAmount;
 console.log('Wallet TBB before:', balBefore);
 
 // --- STAKE 5000 TBB on tier 4 (2-min demo, 18% APR) ---
-const poolInfo = await conn.getAccountInfo(pool);
-const stakeIndex = poolInfo.data.readBigUInt64LE(8 + 32 + 32 + 32 + 8 + 8);
+const stakeIndex = randomBytes(8).readBigUInt64LE(0); // audit #9: caller-chosen stake id
 const idxBuf = Buffer.alloc(8); idxBuf.writeBigUInt64LE(stakeIndex);
 const [stakeAccount] = PublicKey.findProgramAddressSync([Buffer.from('stake'), pool.toBuffer(), payer.publicKey.toBuffer(), idxBuf], PROGRAM_ID);
 const [vault] = PublicKey.findProgramAddressSync([Buffer.from('vault'), stakeAccount.toBuffer()], PROGRAM_ID);
 
 const amount = 5000n * 1_000_000n;
-const data = Buffer.alloc(17);
+const data = Buffer.alloc(25);
 Buffer.from(disc('stake')).copy(data, 0);
 data.writeBigUInt64LE(amount, 8);
 data.writeUInt8(4, 16); // tier 4 = 2-min demo
+data.writeBigUInt64LE(stakeIndex, 17); // stake_id arg (audit #9)
 
 const stakeKeys = [
   { pubkey: payer.publicKey, isSigner: true, isWritable: true },
