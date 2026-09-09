@@ -213,6 +213,9 @@ pub mod tbb_staking {
 
         // Treasury must already hold enough to honor this stake's interest,
         // beyond what is already promised to earlier stakers.
+        // Audit A26ART1 #13: the post-reservation remainder must keep >= 1 base
+        // unit permanently in the treasury (matching withdraw_surplus), so a
+        // maturing position can never settle the treasury to zero.
         let pool = &mut ctx.accounts.pool;
         let available = ctx
             .accounts
@@ -220,7 +223,10 @@ pub mod tbb_staking {
             .amount
             .checked_sub(pool.total_promised_interest)
             .ok_or(StakingError::TreasuryUnderfunded)?;
-        require!(available >= interest, StakingError::TreasuryUnderfunded);
+        let remaining = available
+            .checked_sub(interest)
+            .ok_or(StakingError::TreasuryUnderfunded)?;
+        require!(remaining >= 1, StakingError::TreasuryUnderfunded);
 
         let stake_acc = &mut ctx.accounts.stake_account;
         stake_acc.staker = ctx.accounts.staker.key();
