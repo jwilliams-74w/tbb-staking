@@ -2,7 +2,8 @@
 
 ## AUDIT (Accretion, A26ART1)
 - Findings repo: https://github.com/accretion-xyz/2026-artemis-capital-llc-audit-A26ART1/issues
-- All 9 findings (#3 HIGH dusting, #5–#8 hostile-mint, #9 stake nonce, #10 zero-interest, #11 init front-run, #12 hardcoded tiers) remediated 2026-09-07; remediation commits linked on each issue
+- All 10 findings remediated (#3 HIGH dusting, #5–#8 hostile-mint, #9 stake nonce, #10 zero-interest, #11 init front-run, #12 hardcoded tiers on 9/7; #13 treasury one-unit reserve on 9/9, commit 5f8129e). Remediation commits linked on each issue. #3 tagged fixed+reviewed by auditors.
+- #13: stake now requires (available - interest) >= 1 base unit post-reservation — treasury can never settle to zero. Test: issue13-reserve-test.mjs (fresh ledger, 4/4). Devnet in-place upgrade queued on faucet cron (needs ~2.3 SOL buffer).
 - Key program changes: full-vault sweep on unstake; mint validated at init (no freeze auth / fee / hook / permanent delegate / close auth); treasury seeded ≥1 unit at init and floor kept by withdraw_surplus; stake PDA seeded by caller-random stake_id; interest>0 required; init gated to program upgrade authority (pass program + programdata accounts); tiers live in Pool state w/ set_tiers + scheduled cutover
 - stake ix args now (amount: u64, tier: u8, stake_id: u64); initialize_pool takes (initial_funding: u64) + funder_ata + program + programdata accounts
 - Test suites: e2e, lifecycle, adversarial (12), audit-regression-test.mjs (7), hostile-mint-test.mjs (6 — needs FRESH ledger, no pool)
