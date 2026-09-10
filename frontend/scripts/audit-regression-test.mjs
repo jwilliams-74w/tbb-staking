@@ -105,7 +105,7 @@ console.log('=== AUDIT A26ART1 REGRESSION SUITE ===\n');
   await waitUnlock(stakeAccount);
   const before = BigInt((await conn.getTokenAccountBalance(payerAta)).value.amount);
   try {
-    await sendAndConfirmTransaction(conn, new Transaction().add(
+    const sig = await sendAndConfirmTransaction(conn, new Transaction().add(
       unstakeIx(payer.publicKey, payerAta, stakeAccount, vault)), [payer]);
     const after = BigInt((await conn.getTokenAccountBalance(payerAta)).value.amount);
     const interest = (amt * 1800n * 120n) / 10_000n / 31_536_000n;
@@ -114,6 +114,27 @@ console.log('=== AUDIT A26ART1 REGRESSION SUITE ===\n');
     record('#3 Dusted vault unstakes; full balance swept; vault closed',
       after - before === expected && closed,
       `got ${after - before}, expected ${expected}, vault closed=${closed}`);
+
+    // #3 follow-up (auditor brymko): the Unstaked event must report the RECORDED
+    // principal, with donated dust broken out — never principal+dust in `amount`,
+    // or off-chain bookkeeping ingests attacker-inflated withdrawal figures.
+    const tx = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+    const evDisc = createHash('sha256').update('event:Unstaked').digest().subarray(0, 8);
+    let ev = null;
+    for (const log of tx.meta.logMessages) {
+      if (!log.startsWith('Program data: ')) continue;
+      const raw = Buffer.from(log.slice('Program data: '.length), 'base64');
+      if (raw.subarray(0, 8).equals(evDisc)) {
+        ev = {
+          amount: raw.readBigUInt64LE(8 + 32),
+          dust: raw.readBigUInt64LE(8 + 32 + 8),
+          interest: raw.readBigUInt64LE(8 + 32 + 16),
+        };
+      }
+    }
+    record('#3b Unstaked event: amount = recorded principal, dust separate',
+      ev !== null && ev.amount === amt && ev.dust === 1n && ev.interest === interest,
+      ev ? `amount=${ev.amount} (principal=${amt}), dust=${ev.dust}, interest=${ev.interest}` : 'event not found in logs');
   } catch (e) {
     record('#3 Dusted vault unstakes', false, `unstake FAILED: ${e.message.slice(0, 120)}`);
   }

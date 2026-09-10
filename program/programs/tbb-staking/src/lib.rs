@@ -329,9 +329,14 @@ pub mod tbb_staking {
         pool.total_promised_interest =
             pool.total_promised_interest.saturating_sub(stake_acc.interest);
 
+        // Audit A26ART1 #3 follow-up: report the RECORDED principal in `amount`,
+        // never the swept balance — otherwise an attacker who dusts the vault
+        // inflates the withdrawal figure that off-chain bookkeeping ingests.
+        // Unsolicited donations are broken out separately as `dust`.
         emit!(Unstaked {
             staker: staker_key,
-            amount: vault_balance,
+            amount: stake_acc.amount,
+            dust: vault_balance.saturating_sub(stake_acc.amount),
             interest: stake_acc.interest,
         });
         Ok(())
@@ -561,7 +566,10 @@ pub struct Staked {
 #[event]
 pub struct Unstaked {
     pub staker: Pubkey,
+    /// Recorded principal returned (never includes donated dust).
     pub amount: u64,
+    /// Unsolicited tokens swept from the vault on top of the principal.
+    pub dust: u64,
     pub interest: u64,
 }
 
