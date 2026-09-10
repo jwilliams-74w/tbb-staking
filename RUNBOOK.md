@@ -9,6 +9,10 @@
 - stake ix args now (amount: u64, tier: u8, stake_id: u64); initialize_pool takes (initial_funding: u64) + funder_ata + program + programdata accounts
 - Test suites: e2e, lifecycle, adversarial (12), audit-regression-test.mjs (7), hostile-mint-test.mjs (6 — needs FRESH ledger, no pool)
 
+## MAINNET (reserved, NOT deployed)
+- Program ID: `4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT` — keypair at program/target/deploy/tbb_staking-mainnet-keypair.json (gitignored) + NAS backup /Volumes/Ai-Vault/Documents/TBB/staking-keys/. Given to Accretion 9/10 for the report.
+- Frontend PROGRAM_ID now env-driven: NEXT_PUBLIC_PROGRAM_ID (falls back to devnet GWdC…). Mainnet cutover = set env var in Vercel + swap declare_id! + rebuild + deploy.
+
 ## LIVE ON DEVNET (public network) — primary environment
 - Program: `GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk` (audited build; old 4GgJ… program closed, rent reclaimed)
 - **Public frontend: https://tbb-staking-going-parabolic.vercel.app** (Vercel, project tbb-staking, team going-parabolic)

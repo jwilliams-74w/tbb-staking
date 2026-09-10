@@ -1,7 +1,11 @@
 import { PublicKey } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 
-export const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
+// Devnet (audited build) by default; mainnet flips via env var — no code change.
+// Mainnet program ID: 4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT (keypair held offline, not yet deployed)
+export const PROGRAM_ID = new PublicKey(
+  process.env.NEXT_PUBLIC_PROGRAM_ID ?? 'GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk'
+);
 export const TBB_MINT = new PublicKey('42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump');
 
 export const TIERS = [

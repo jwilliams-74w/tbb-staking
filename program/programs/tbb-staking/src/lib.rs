@@ -5,6 +5,10 @@ use anchor_spl::token_2022::spl_token_2022::{
 };
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
+// DEVNET ID. At mainnet deploy time swap to the reserved mainnet ID
+// 4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT (keypair: target/deploy/
+// tbb_staking-mainnet-keypair.json + offline backup) and rebuild —
+// declare_id! must always match the address the binary is deployed to.
 declare_id!("GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk");
 
 pub const SECONDS_PER_YEAR: u128 = 31_536_000; // 365 days
