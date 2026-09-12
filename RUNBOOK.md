@@ -5,10 +5,12 @@
 - ALL findings remediated AND fix-reviewed. #3 follow-up (event bookkeeping, eee0083) approved by brymko ("LGTM now") 9/12; issue closed. Only meta tracker issues remain open.
 - Accretion recommendation implemented: demo tier REMOVED from DEFAULT_TIERS for mainnet (slot 5 now mirrors 12-month tier). Frontend hides tier 5 unless NEXT_PUBLIC_SHOW_DEMO_TIER=1.
 
-## MAINNET (READY TO DEPLOY — pending funding + authority decision)
-- Program ID: `4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT` — declare_id! now set to this (mainnet build). Keypair: program/target/deploy/tbb_staking-mainnet-keypair.json (gitignored) + NAS /Volumes/Ai-Vault/Documents/TBB/staking-keys/
-- Mainnet binary built + REHEARSED on local validator under the mainnet ID: pool init, e2e stake, tier table verified (verify-tiers.mjs: no lock < 30d), adversarial guards 1-8 pass. Binary sha256 1c3a6e9f34fc… (commit this-commit). NOTE: differs from audited eee0083 binary ONLY in declare_id + tier-5 constant.
-- Deploy sequence: (1) fund deploy wallet GsFnpyNUEny2L7KEfUiN8QtpU29eDJPEZuq3XMFH7yWv w/ ~3.5 mainnet SOL → (2) `solana program deploy target/deploy/tbb_staking.so --program-id target/deploy/tbb_staking-mainnet-keypair.json --url mainnet-beta` → (3) init pool w/ REAL mint 42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump + 5,000,000 TBB initial treasury (100 TBB test received 9/12, ATA F7tu34T6mZWDsbYcELjQ5YxyuB8A6yKa6YZj5mt1xtMo) → (4) MOVE UPGRADE AUTHORITY to Jason's TREZOR Solana address (DECIDED: option A — near-immutable; Solana CLI can't sign w/ Trezor, so future upgrades effectively impossible; tiers stay adjustable via pool-authority set_tiers) → (5) Vercel env: NEXT_PUBLIC_PROGRAM_ID=4Kgv…, NEXT_PUBLIC_TBB_MINT=42cX…, paid RPC → (6) canary stake + verify-integrity.mjs before announcing.
+## MAINNET — 🟢 LIVE (deployed 9/12/26)
+- Program `4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT` deployed (binary 1c3a6e9f…); pool `67bWpBwiiEdgP78ASpAPg6Next2Gtdycu1GFumRLs1Xw`, treasury `JGCQDHSSDZvoACsvSeh46c1BQ43tEoa3kp5bbSW9eW1` = 5,000,000 TBB (init tx 42zvBuUss2…AzW85). Real mint 42cX…pump passed init validation. Tiers verified on-chain: 30d/5% 90d/8% 180d/12% 365d/18% ×2, NO demo tier.
+- UPGRADE AUTHORITY = Jason's Trezor `5tXbZm8pq7wne5cQaSWvWhtF8MvCjxSyfBNB89bqJe3m` (verified on-chain; program effectively immutable — CLI can't sign w/ Trezor). Pool authority (set_tiers/fund_treasury/withdraw_surplus) = deploy wallet GsFn… (keep keypair safe; cannot touch principal or promised interest).
+- Frontend: tbb-staking-going-parabolic.vercel.app on Helius RPC (key in NEXT_PUBLIC — add domain allowlist in Helius dashboard as traffic grows). Faucet gated off mainnet (UI + API 403, commit 6371adb).
+- CANARY VERIFIED 9/12: Jason staked 1,000 TBB tier 0 (stake #2715193587295721703) — interest exact (4.109589), pool totals == Σ stakes, treasury solvent. verify-integrity.mjs takes PROGRAM_ID/TBB_MINT/RPC_URL env for mainnet runs.
+- CLEARED TO ANNOUNCE.
 - All scripts accept PROGRAM_ID env override (default remains devnet GWdC…).
 
 ## LIVE ON DEVNET (public network) — regression environment
