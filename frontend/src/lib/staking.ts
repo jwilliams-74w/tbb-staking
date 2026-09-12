@@ -72,6 +72,22 @@ export async function fetchPoolTotalStakes(conn: Connection): Promise<bigint> {
   return info.data.readBigUInt64LE(8 + 32 + 32 + 32 + 8 + 8);
 }
 
+/** Live pool stats straight from chain state (single account read). */
+export async function fetchPoolStats(conn: Connection): Promise<{
+  totalStakedUi: number;      // TBB currently locked across all vaults
+  totalPromisedUi: number;    // interest promised to open stakes
+  totalStakes: number;        // lifetime stake count
+}> {
+  const info = await conn.getAccountInfo(getPoolPDA());
+  if (!info) throw new Error('Pool not initialized');
+  const base = 8 + 32 + 32 + 32; // disc + authority + mint + treasury
+  return {
+    totalStakedUi: Number(info.data.readBigUInt64LE(base)) / 1e6,
+    totalPromisedUi: Number(info.data.readBigUInt64LE(base + 8)) / 1e6,
+    totalStakes: Number(info.data.readBigUInt64LE(base + 16)),
+  };
+}
+
 export async function buildStakeTx(conn: Connection, staker: PublicKey, amountUi: number, tier: number): Promise<Transaction> {
   const pool = getPoolPDA();
   const treasury = getTreasuryPDA();

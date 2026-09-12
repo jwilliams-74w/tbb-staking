@@ -6,6 +6,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { StakingInterface } from '@/components/StakingInterface';
 import { UserDashboard } from '@/components/UserDashboard';
 import { FaucetButton } from '@/components/FaucetButton';
+import { PoolStats } from '@/components/PoolStats';
 
 export default function Home() {
   const { connected } = useWallet();
@@ -40,6 +41,8 @@ export default function Home() {
           <p className="text-xl text-gray-300 mb-8">
             Lock your TBB tokens and earn up to <span className="text-tbb-orange font-semibold">18% APR</span>
           </p>
+
+          <PoolStats refreshKey={refreshKey} />
           
           {/* Tier Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
