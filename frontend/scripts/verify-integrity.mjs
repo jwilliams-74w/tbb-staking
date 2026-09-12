@@ -7,9 +7,9 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || 'GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 const envFile = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
-const TBB_MINT = new PublicKey(envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
+const TBB_MINT = new PublicKey(process.env.TBB_MINT || envFile.match(/NEXT_PUBLIC_TBB_MINT=(\S+)/)[1]);
 const disc = (n) => createHash('sha256').update(`global:${n}`).digest().subarray(0, 8);
 const conn = new Connection(process.env.RPC_URL || 'http://127.0.0.1:8899', 'confirmed');
 const payer = Keypair.fromSecretKey(new Uint8Array(JSON.parse(readFileSync(`${homedir()}/.config/solana/id.json`))));
