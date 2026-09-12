@@ -1,9 +1,17 @@
 # TBB Staking — Current State & Runbook (updated 2026-09-07, post-audit-remediation)
 
-## AUDIT (Accretion, A26ART1)
+## AUDIT (Accretion, A26ART1) — ✅ COMPLETE, FINAL SIGN-OFF 9/12/26
 - Findings repo: https://github.com/accretion-xyz/2026-artemis-capital-llc-audit-A26ART1/issues
-- All 10 findings remediated (#3 HIGH dusting, #5–#8 hostile-mint, #9 stake nonce, #10 zero-interest, #11 init front-run, #12 hardcoded tiers on 9/7; #13 treasury one-unit reserve on 9/9, commit 5f8129e). Remediation commits linked on each issue.
-- #3 FOLLOW-UP (9/10, auditor brymko): sweep fix emitted swept balance as Unstaked.amount → attacker could dust-inflate off-chain bookkeeping. Fixed commit eee0083: Unstaked.amount = recorded principal, new dust field = vault_balance − principal. Regression #3b (audit-regression-test.mjs) decodes event from logs, asserts amount/dust/interest. Issue #3 reopened pending auditor fix-review; devnet upgrade queued (needs ~2.3 SOL, wallet at ~0.6).
+- ALL findings remediated AND fix-reviewed. #3 follow-up (event bookkeeping, eee0083) approved by brymko ("LGTM now") 9/12; issue closed. Only meta tracker issues remain open.
+- Accretion recommendation implemented: demo tier REMOVED from DEFAULT_TIERS for mainnet (slot 5 now mirrors 12-month tier). Frontend hides tier 5 unless NEXT_PUBLIC_SHOW_DEMO_TIER=1.
+
+## MAINNET (READY TO DEPLOY — pending funding + authority decision)
+- Program ID: `4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT` — declare_id! now set to this (mainnet build). Keypair: program/target/deploy/tbb_staking-mainnet-keypair.json (gitignored) + NAS /Volumes/Ai-Vault/Documents/TBB/staking-keys/
+- Mainnet binary built + REHEARSED on local validator under the mainnet ID: pool init, e2e stake, tier table verified (verify-tiers.mjs: no lock < 30d), adversarial guards 1-8 pass. Binary sha256 1c3a6e9f34fc… (commit this-commit). NOTE: differs from audited eee0083 binary ONLY in declare_id + tier-5 constant.
+- Deploy sequence: (1) fund deploy wallet GsFnpyNUEny2L7KEfUiN8QtpU29eDJPEZuq3XMFH7yWv w/ ~3.5 mainnet SOL → (2) `solana program deploy target/deploy/tbb_staking.so --program-id target/deploy/tbb_staking-mainnet-keypair.json --url mainnet-beta` → (3) init pool w/ REAL mint 42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump + initial_funding from Jason's TBB ATA (setup script w/ PROGRAM_ID + mainnet RPC + real-mint mode) → (4) MOVE UPGRADE AUTHORITY to hardware wallet/multisig (decision pending) → (5) fund_treasury w/ real interest budget (amount pending) → (6) Vercel env: NEXT_PUBLIC_PROGRAM_ID=4Kgv…, NEXT_PUBLIC_TBB_MINT=42cX…, paid RPC → (7) canary stake + verify-integrity.mjs before announcing.
+- All scripts accept PROGRAM_ID env override (default remains devnet GWdC…).
+
+## LIVE ON DEVNET (public network) — regression environment
 - #13: stake now requires (available - interest) >= 1 base unit post-reservation — treasury can never settle to zero. Test: issue13-reserve-test.mjs (fresh ledger, 4/4). Devnet in-place upgrade queued on faucet cron (needs ~2.3 SOL buffer).
 - Key program changes: full-vault sweep on unstake; mint validated at init (no freeze auth / fee / hook / permanent delegate / close auth); treasury seeded ≥1 unit at init and floor kept by withdraw_surplus; stake PDA seeded by caller-random stake_id; interest>0 required; init gated to program upgrade authority (pass program + programdata accounts); tiers live in Pool state w/ set_tiers + scheduled cutover
 - stake ix args now (amount: u64, tier: u8, stake_id: u64); initialize_pool takes (initial_funding: u64) + funder_ata + program + programdata accounts

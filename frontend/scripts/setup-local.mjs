@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 
 const RPC = 'http://127.0.0.1:8899';
-const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || 'GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 
 const disc = (name) => createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
 

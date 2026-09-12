@@ -2,16 +2,23 @@
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 
-export const PROGRAM_ID = new PublicKey('GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
+export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID || 'GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk');
 export const TBB_MINT = new PublicKey(process.env.NEXT_PUBLIC_TBB_MINT || '42cXQvAAr7hcPBPWAS4ocVtDyeJ4Fa6gRR2uG4gppump');
 
-export const TIERS = [
+const ALL_TIERS = [
   { name: '1 Month', days: 30, seconds: 30 * 86400, aprBps: 500 },
   { name: '3 Months', days: 90, seconds: 90 * 86400, aprBps: 800 },
   { name: '6 Months', days: 180, seconds: 180 * 86400, aprBps: 1200 },
   { name: '12 Months', days: 365, seconds: 365 * 86400, aprBps: 1800 },
   { name: '⚡ 2-Min Demo', days: 0, seconds: 120, aprBps: 1800 },
 ];
+
+// The 2-min demo tier exists only on devnet/local pools (mainnet slot 5
+// mirrors the 12-month tier — removed per Accretion audit recommendation).
+// Show it only when explicitly enabled for a dev environment.
+export const TIERS = process.env.NEXT_PUBLIC_SHOW_DEMO_TIER === '1'
+  ? ALL_TIERS
+  : ALL_TIERS.slice(0, 4);
 
 // sha256('global:<name>')[0..8] — precomputed in Node (crypto not available in browser sync):
 // stake: computed below via subtle crypto at call time; we cache after first use.

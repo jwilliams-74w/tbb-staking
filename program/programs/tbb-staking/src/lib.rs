@@ -5,11 +5,10 @@ use anchor_spl::token_2022::spl_token_2022::{
 };
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-// DEVNET ID. At mainnet deploy time swap to the reserved mainnet ID
-// 4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT (keypair: target/deploy/
-// tbb_staking-mainnet-keypair.json + offline backup) and rebuild —
-// declare_id! must always match the address the binary is deployed to.
-declare_id!("GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk");
+// MAINNET ID (deployed build). Devnet still runs this program logic at
+// GWdCWaDbCJfBNzND3K4f8JMRCcv16sWSSapmp8cf1Khk from commit eee0083;
+// swap declare_id back to that address if a devnet redeploy is ever needed.
+declare_id!("4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT");
 
 pub const SECONDS_PER_YEAR: u128 = 31_536_000; // 365 days
 pub const TIER_COUNT: usize = 5;
@@ -24,7 +23,7 @@ pub const DEFAULT_TIERS: [TierConfig; TIER_COUNT] = [
     TierConfig { lock_seconds: 90 * 86_400, apr_bps: 800 },   // 3 months -> 8% APR
     TierConfig { lock_seconds: 180 * 86_400, apr_bps: 1200 }, // 6 months -> 12% APR
     TierConfig { lock_seconds: 365 * 86_400, apr_bps: 1800 }, // 12 months -> 18% APR
-    TierConfig { lock_seconds: 120, apr_bps: 1800 },          // DEMO: 2-minute lock (replace via set_tiers before mainnet)
+    TierConfig { lock_seconds: 365 * 86_400, apr_bps: 1800 }, // slot 5: mirrors 12-month tier (was devnet 2-min DEMO — removed for mainnet per Accretion; adjustable via set_tiers)
 ];
 
 #[program]
