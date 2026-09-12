@@ -19,6 +19,10 @@ const MAX_EXISTING_TBB = 5_000n * 1_000_000n; // skip wallets already funded
 
 export async function POST(req: NextRequest) {
   try {
+    // Hard network gate: this faucet exists for devnet/local demos only.
+    if (!(RPC.includes('devnet') || RPC.includes('127.0.0.1') || RPC.includes('localhost'))) {
+      return NextResponse.json({ ok: false, error: 'Faucet is devnet-only' }, { status: 403 });
+    }
     if (!process.env.FAUCET_KEYPAIR) {
       return NextResponse.json({ ok: false, error: 'Faucet not configured' }, { status: 500 });
     }

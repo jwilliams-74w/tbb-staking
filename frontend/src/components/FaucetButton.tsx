@@ -8,6 +8,11 @@ export const FaucetButton: FC<{ onFunded?: () => void }> = ({ onFunded }) => {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState('');
 
+  // Devnet-only UI: hide entirely unless the RPC points at devnet or a local validator.
+  const rpc = process.env.NEXT_PUBLIC_RPC_URL || '';
+  const isDevNetwork = rpc.includes('devnet') || rpc.includes('127.0.0.1') || rpc.includes('localhost');
+  if (!isDevNetwork) return null;
+
   const request = async () => {
     if (!publicKey || state === 'loading') return;
     setState('loading');
