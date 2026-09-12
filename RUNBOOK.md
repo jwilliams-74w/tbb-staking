@@ -1,4 +1,4 @@
-# TBB Staking — Current State & Runbook (updated 2026-09-07, post-audit-remediation)
+# TBB Staking — Current State & Runbook (updated 2026-09-12, MAINNET LIVE)
 
 ## AUDIT (Accretion, A26ART1) — ✅ COMPLETE, FINAL SIGN-OFF 9/12/26
 - Findings repo: https://github.com/accretion-xyz/2026-artemis-capital-llc-audit-A26ART1/issues
@@ -11,6 +11,9 @@
 - Frontend: tbb-staking-going-parabolic.vercel.app on Helius RPC (key in NEXT_PUBLIC — add domain allowlist in Helius dashboard as traffic grows). Faucet gated off mainnet (UI + API 403, commit 6371adb).
 - CANARY VERIFIED 9/12: Jason staked 1,000 TBB tier 0 (stake #2715193587295721703) — interest exact (4.109589), pool totals == Σ stakes, treasury solvent. verify-integrity.mjs takes PROGRAM_ID/TBB_MINT/RPC_URL env for mainnet runs.
 - CLEARED TO ANNOUNCE.
+- CUSTOM DOMAIN: stakethebull.xyz bought via Vercel 9/12 ($13/yr, renews 9/2027), assigned to project tbb-staking. DNS propagation pending at last check (watcher script /tmp/watch_domain.sh) — promote https://stakethebull.xyz once resolving; vercel.app URL stays as fallback.
+- HELIUS: RPC key 7b37292f-… (workspace Queenfuschia, project Scowlshy, free tier). Access Control → Allowed Domains = stakethebull.xyz + tbb-staking-going-parabolic.vercel.app (verified: no-origin requests get "Forbidden"; both site origins pass). Key is public in the JS bundle by design (NEXT_PUBLIC).
+- Homepage shows live pool stats (PoolStats.tsx: total TBB staked + stake count, 30s refresh, reads pool account directly).
 - All scripts accept PROGRAM_ID env override (default remains devnet GWdC…).
 
 ## LIVE ON DEVNET (public network) — regression environment
