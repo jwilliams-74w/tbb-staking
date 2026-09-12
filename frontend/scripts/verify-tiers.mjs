@@ -1,7 +1,7 @@
 // Verify the on-chain tier table of the rehearsal pool (mainnet build, local validator)
 import { Connection, PublicKey } from '@solana/web3.js';
 
-const conn = new Connection('http://127.0.0.1:8899', 'confirmed');
+const conn = new Connection(process.env.RPC_URL || 'http://127.0.0.1:8899', 'confirmed');
 const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || '4KgvDmEjPJNtbiVhnZ9Cf1i1vgeZdKrCNKhHVTNTkLWT');
 const [pool] = PublicKey.findProgramAddressSync([Buffer.from('pool')], PROGRAM_ID);
 const acc = await conn.getAccountInfo(pool);
