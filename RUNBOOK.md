@@ -12,7 +12,7 @@
 - CANARY VERIFIED 9/12: Jason staked 1,000 TBB tier 0 (stake #2715193587295721703) — interest exact (4.109589), pool totals == Σ stakes, treasury solvent. verify-integrity.mjs takes PROGRAM_ID/TBB_MINT/RPC_URL env for mainnet runs.
 - CLEARED TO ANNOUNCE.
 - CUSTOM DOMAIN: stakethebull.xyz bought via Vercel 9/12 ($13/yr, renews 9/2027), assigned to project tbb-staking. DNS propagation pending at last check (watcher script /tmp/watch_domain.sh) — promote https://stakethebull.xyz once resolving; vercel.app URL stays as fallback.
-- HELIUS: RPC key 7b37292f-… (workspace Queenfuschia, project Scowlshy, free tier). Access Control → Allowed Domains = stakethebull.xyz + tbb-staking-going-parabolic.vercel.app (verified: no-origin requests get "Forbidden"; both site origins pass). Key is public in the JS bundle by design (NEXT_PUBLIC).
+- HELIUS: **Developer plan $49/mo (9/17/26)**. Frontend now uses the keyless **Secure RPC URL** `https://maud-njww5y-fast-mainnet.helius-rpc.com` (masked, 5 RPS/IP, safe for browsers) — set as NEXT_PUBLIC_RPC_URL; NO api key in the public bundle anymore (independent auditor flagged the exposed key 9/16; fixed 9/17). The keyed URL (7b37292f-…, workspace Queenfuschia, project Scowlshy) is now SERVER-SIDE ONLY: watchdog cron + admin scripts; still domain-allowlisted (stakethebull.xyz + vercel.app). If key ever abused: rotate in dashboard, update ~/.hermes/scripts/tbb_treasury_watchdog.py + /tmp scripts.
 - Homepage shows live pool stats (PoolStats.tsx: total TBB staked + stake count, 30s refresh, reads pool account directly).
 - All scripts accept PROGRAM_ID env override (default remains devnet GWdC…).
 
